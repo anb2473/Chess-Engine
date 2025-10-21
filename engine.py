@@ -174,8 +174,8 @@ class Human(Controller):
         self.render_board()
         user_input = input(f"{"♔  Black" if self.is_black else "♚ White"}: ")
         self.move_id = int(user_input[0]) * 10 + int(user_input[1])
-        x = ord(user_input[2].lower()) - ord('a') + 1 # x is a letter
-        y = int(user_input[3]) - 1
+        x = ord(user_input[2].lower()) - ord('a') # x is a letter
+        y = 8 - int(user_input[3])
         self.move_location = (x, y)
 
 
@@ -255,7 +255,9 @@ class Engine(Controller):
             control_value += 0.5
             controlled_id = self.board.pos_board[candidate_loc[1]][candidate_loc[0]]
             if controlled_id is not None:
-                controlled_piece = self.board.id_board[int(self.is_black)][controlled_id]
+                controlled_piece = self.board.id_board[0].get(controlled_id)
+                if controlled_piece is None:
+                    controlled_piece = self.board.id_board[1].get(controlled_id)
                 control_value += controlled_piece.value + controlled_defense_weight if controlled_piece.is_black == self.is_black else controlled_offense_weight
 
         return score
