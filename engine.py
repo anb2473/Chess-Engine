@@ -8,8 +8,8 @@
 
 
 class Piece:
-    def __init__(self, type, loc, board, value):
-        self.type = type
+    def __init__(self, piece_type, loc, board, value):
+        self.piece_type = piece_type
         self.loc = loc
         self.board = board
         self.value = value
@@ -128,15 +128,15 @@ class Controller:
         self.board = board
         self.is_black = is_black
         self.move_id = None
-        self.move = None
+        self.move_location = None
 
     # Move formatted as
     def execute_move(self):
         if self.move_id is None:
             raise ValueError("Cannot move none type piece")
-        if self.move is None:
+        if self.move_location is None:
             raise ValueError("Cannot move piece to none type location")
-        self.board.move_piece(self.move_id, self.move, self.is_black)
+        self.board.move_piece(self.move_id, self.move_location, self.is_black)
 
     # child class overrides this
     def generate_move(self):
@@ -149,12 +149,34 @@ class Controller:
 
 
 class Human(Controller):
+    def render_board(self):
+        white_emoji_map = {"pawn": "♟", "rook": "♜", "knight": "♞", "bishop": "♝", "queen": "♛", "king": "♚"}
+        black_emoji_map = {"pawn": "♙", "rook": "♖", "knight": "♘", "bishop": "♗", "queen": "♕", "king": "♔"}
+        row_num = 8
+        for row in self.board.pos_board:
+            print(row_num, end=" ")
+            for piece_id in row:
+                if piece_id is None:
+                    print("    ", end=" ")
+                else:
+                    piece = self.board.id_board[0].get(piece_id)
+                    if piece is None:
+                        piece = self.board.id_board[1].get(piece_id)
+                    if piece.is_black:
+                        print(black_emoji_map.get(piece.piece_type) + " " + str(piece_id).zfill(2), end=" ")
+                    else:
+                        print(white_emoji_map.get(piece.piece_type) + " " + str(piece_id).zfill(2), end=" ")
+            print()
+            row_num -= 1
+        print("   a    b    c    d    e    f    g    h")
+ 
     def generate_move(self):
-        user_input = input(f"{"♔ Black" if self.is_black else "♚ White"}:")
-        self.move_id = user_input[0]
-        x = ord(user_input[1].lower()) - ord('a') + 1 # x is a letter
-        y = int(user_input[2]) - 1
-        self.move = (x, y)
+        self.render_board()
+        user_input = input(f"{"♔  Black" if self.is_black else "♚ White"}: ")
+        self.move_id = int(user_input[0]) * 10 + int(user_input[1])
+        x = ord(user_input[2].lower()) - ord('a') + 1 # x is a letter
+        y = int(user_input[3]) - 1
+        self.move_location = (x, y)
 
 
 class Engine(Controller):
@@ -183,7 +205,7 @@ class Engine(Controller):
                 occurances += 1
         return occurances
 
-    def evaluate_move(self, pieces, piece, move):
+    def evaluate_move(self, pieces, piece, move_location):
         """
         Criteria:
         - is the piece safe (can it be taken with an unfair trade)
@@ -198,7 +220,7 @@ class Engine(Controller):
 
         # is it safe (must be multiplied by 4 because the value of the back rank is 24, so if it is less
         #       you are incentivized to put a rook on the backrank even if it is in danger)
-        if move in enemy_moves and self.count_occurances(move, pieces) > 1:
+        if move_location in enemy_moves and self.count_occurances(move_location, pieces) > 1:
             score -= piece.value * 4
 
         # how often has it been moved
@@ -221,7 +243,8 @@ class Engine(Controller):
             board_value[piece.loc[1]][piece.loc[0]] = piece.value
         
         new_pieces = pieces.copy()
-        new_pieces[piece] = move
+        new_piece = next((v for k, v in pieces.items() if v == piece), None)
+        new_piece.loc = move_location
         new_candidates = self.list_candidates(new_pieces)
         control_value = 0.0
         controlled_defense_weight = 0.75
@@ -244,6 +267,16 @@ class Engine(Controller):
         if len(self.last_moves) > 3:
             self.last_moves = self.last_moves[-3:]
 
+        best_score = float('-inf')
+        best_candidate = None
+        for candidate in candidates:
+            score = self.evaluate_move(pieces, candidate[0], candidate[1])
+            if score > best_score:
+                best_score = score
+                best_candidate = candidate
+        self.move_id = next((k for k, v in pieces.items() if v == best_candidate[0]), None)
+        self.move_location = best_candidate[1]
+
 
 class Board:
     def __init__(self):
@@ -261,8 +294,8 @@ class Board:
         return side_dict
 
     def pos_side(self, side, pos_board):
-        for id, piece in side.items():
-            pos_board[piece.loc[1]][piece.loc[0]] = id
+        for piece_id, piece in side.items():
+            pos_board[piece.loc[1]][piece.loc[0]] = piece_id
 
     # generate hashmap with id's for each piece, and a positional 2d array of the board
     def generate_board(self, board):
@@ -276,7 +309,7 @@ class Board:
     def attach_controller(self, controller):
         if not isinstance(controller, Controller):
             raise ValueError("Cannot attach non controller object as controller")
-        if self.controllers[int(controller.is_black)]:
+        if self.controllers[int(controller.is_black)] is not None:
             raise ValueError("Cannot override controller")
         self.controllers[int(controller.is_black)] = controller
 
@@ -305,9 +338,11 @@ class Board:
         return 0 <= loc[0] < 8 and 0 <= loc[1] < 8
 
     def run(self):
+        if self.controllers[0] is None or self.controllers[1] is None:
+            raise ValueError("Both controllers must be attached before running the game")
+        
         is_black = False
         while self.running:
-            print(self.controllers[int(is_black)])
             self.controllers[int(is_black)].move(self)
             is_black = not is_black
 
