@@ -30,7 +30,7 @@ class Piece:
                 break
             if not self.board.is_empty(pos):
                 open = False
-                if self.board.is_black(pos) == self.is_black:
+                if self.board.is_black(pos) != self.is_black:
                     points.append(tuple(pos))
                 break
             points.append(tuple(pos))
@@ -225,10 +225,9 @@ class Engine(Controller):
 
         # how often has it been moved
         harm = 5
-        for move in self.last_moves:
-            if move[0] == piece:
-                score -= harm
-                harm *= 2
+        for piece in self.last_moves:
+            score -= harm
+            harm *= 2
 
         # how many squares does it control
         board_value = [[3, 3, 3, 3, 3, 3, 3, 3],
@@ -260,14 +259,17 @@ class Engine(Controller):
                     controlled_piece = self.board.id_board[1].get(controlled_id)
                 control_value += controlled_piece.value + controlled_defense_weight if controlled_piece.is_black == self.is_black else controlled_offense_weight
 
+        score += control_value
+        print(score)
+
         return score
 
     def generate_move(self):
-        pieces, candidates = self.index_moves(self.is_black)
-
         # This will be set when a move is selected
         if len(self.last_moves) > 3:
             self.last_moves = self.last_moves[-3:]
+
+        pieces, candidates = self.index_moves(self.is_black)
 
         best_score = float('-inf')
         best_candidate = None
@@ -276,8 +278,10 @@ class Engine(Controller):
             if score > best_score:
                 best_score = score
                 best_candidate = candidate
+        print(best_candidate)
         self.move_id = next((k for k, v in pieces.items() if v == best_candidate[0]), None)
         self.move_location = best_candidate[1]
+        self.last_moves.append(best_candidate[0])
 
 
 class Board:
